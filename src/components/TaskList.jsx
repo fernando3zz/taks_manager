@@ -52,6 +52,7 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
 
     if (onReplaceFile) {
       onReplaceFile(editTaskId, selectedFile);
+      alert("File berhasil diedit!"); // Alert untuk notifikasi berhasil
     } else {
       console.error("❌ Error: onReplaceFile tidak tersedia");
     }
