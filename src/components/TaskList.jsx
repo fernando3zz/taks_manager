@@ -6,10 +6,11 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
     title: "",
     description: "",
     status: "",
+    deadline: "",
   });
   const [selectedFile, setSelectedFile] = useState(null);
 
-  // Fungsi untuk memulai mode edit pada tugas tertentu
+  // Fungsi untuk memulai mode edit
   const handleEditClick = (task) => {
     setEditTaskId(task.id);
     setEditValues({
@@ -18,12 +19,13 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
       status: task.status,
       deadline: task.deadline,
     });
-    setSelectedFile(null); // Reset pilihan file
+    setSelectedFile(null);
   };
 
-  // Fungsi untuk menyimpan perubahan pada tugas yang sedang diedit
+  // Fungsi untuk menyimpan perubahan
   const handleSaveEdit = () => {
     if (!editTaskId) return;
+
     if (!editValues.title.trim() || !editValues.description.trim()) {
       alert("Title dan Deskripsi tidak boleh kosong!");
       return;
@@ -33,29 +35,29 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
       title: editValues.title.trim(),
       description: editValues.description.trim(),
       status: editValues.status,
-      deadline: editValues.deadline, // Pastikan deadline diteruskan
+      deadline: editValues.deadline,
     };
 
-    onEdit(editTaskId, updateData); // Kirim data termasuk deadline
+    onEdit(editTaskId, updateData);
     alert("Perubahan berhasil disimpan!");
     setEditTaskId(null);
   };
 
-  // Fungsi untuk menangani pemilihan file
+  // Fungsi untuk menangani unggahan file
   const handleFileUpload = (event) => {
     setSelectedFile(event.target.files[0]);
   };
 
-  // Fungsi untuk menyimpan file yang diunggah pada tugas yang sedang diedit
+  // Fungsi untuk menyimpan file yang diunggah
   const handleSaveFileEdit = () => {
     if (!editTaskId || !selectedFile) {
-      console.error("❌ Error: Tidak ada tugas yang dipilih atau file yang dipilih");
+      console.error("❌ Error: Tidak ada tugas atau file yang dipilih");
       return;
     }
 
     if (onReplaceFile) {
       onReplaceFile(editTaskId, selectedFile);
-      alert("File berhasil diedit!"); // Alert untuk notifikasi berhasil
+      alert("File berhasil diedit!");
     } else {
       console.error("❌ Error: onReplaceFile tidak tersedia");
     }
@@ -71,6 +73,20 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
     );
   };
 
+  // Fungsi untuk mendapatkan status berikutnya
+  const getNextStatus = (currentStatus) => {
+    if (currentStatus === "open") return "in_progress";
+    if (currentStatus === "in_progress") return "done";
+    return "done";
+  };
+
+  // Fungsi untuk mendapatkan status sebelumnya
+  const getPreviousStatus = (currentStatus) => {
+    if (currentStatus === "done") return "in_progress";
+    if (currentStatus === "in_progress") return "open";
+    return "open";
+  };
+
   return (
     <div className="mt-6">
       {tasks.length === 0 ? (
@@ -80,7 +96,7 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
           <div key={task.id} className="relative bg-white bg-opacity-10 backdrop-blur-md p-5 rounded-xl shadow-lg z-0">
             {editTaskId === task.id ? (
               <div>
-                {/* Input untuk mengedit judul tugas */}
+                {/* form Input untuk mengedit judul tugas */}
                 <input
                   type="text"
                   value={editValues.title}
@@ -131,6 +147,7 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
               </div>
             ) : (
               <div>
+                {/* Informasi Tugas */}
                 <h3 className="text-lg font-bold text-gray-800">{task.title}</h3>
                 <p className="text-gray-300 mt-1">{task.description}</p>
                 {task.creation_time && (
@@ -147,6 +164,7 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
               </div>
             )}
 
+            {/* Tombol Aksi */}
             <div className="mt-4 flex justify-between items-center">
               <div className="flex gap-2">
                 {task.status !== "done" && task.status !== "open" && (
@@ -155,20 +173,18 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
                     onClick={() => onUpdateStatus(task.id, getPreviousStatus(task.status))}
                     className="bg-gray-400 text-white px-2 py-1 rounded-md text-sm hover:bg-gray-500 transition"
                   >
-                    ⬅️ Kembali
+                    {task.status === "in_progress" ? "⬅️ Open" : "⬅️ Kembali"}
                   </button>
                 )}
-
                 {task.status !== "done" && (
                   <button
                     type="button"
                     onClick={() => onUpdateStatus(task.id, getNextStatus(task.status))}
                     className="bg-blue-500 text-white px-2 py-1 rounded-md text-sm hover:bg-blue-600 transition"
                   >
-                    ➡️ Lanjut
+                    {task.status === "open" ? "➡️ In Progress" : "➡️ Done"}
                   </button>
                 )}
-
                 {editTaskId !== task.id && task.status !== "done" && (
                   <button
                     type="button"
@@ -178,7 +194,6 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
                     ✏️ Edit
                   </button>
                 )}
-
                 <button
                   type="button"
                   onClick={() => {
@@ -197,20 +212,6 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
       )}
     </div>
   );
-};
-
-// Fungsi untuk mendapatkan status berikutnya
-const getNextStatus = (currentStatus) => {
-  if (currentStatus === "open") return "in_progress";
-  if (currentStatus === "in_progress") return "done";
-  return "done";
-};
-
-// Fungsi untuk mendapatkan status sebelumnya
-const getPreviousStatus = (currentStatus) => {
-  if (currentStatus === "done") return "in_progress";
-  if (currentStatus === "in_progress") return "open";
-  return "open";
 };
 
 export default TaskList;
