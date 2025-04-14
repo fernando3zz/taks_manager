@@ -155,6 +155,7 @@ function Dashboard() {
         title: updatedData.title,
         description: updatedData.description,
         status: updatedData.status,
+        deadline: updatedData.deadline, // Menambahkan deadline ke data yang dikirim
         user_id: user.id,
       });
 
@@ -205,6 +206,9 @@ function Dashboard() {
 
   // Fungsi untuk logout pengguna
   const handleLogout = async () => {
+    const confirmLogout = window.confirm("Apakah Anda yakin ingin keluar?");
+    if (!confirmLogout) return;
+
     try {
       await supabase.auth.signOut();
       navigate("/");

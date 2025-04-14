@@ -16,6 +16,7 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
       title: task.title,
       description: task.description,
       status: task.status,
+      deadline: task.deadline,
     });
     setSelectedFile(null); // Reset pilihan file
   };
@@ -32,9 +33,11 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
       title: editValues.title.trim(),
       description: editValues.description.trim(),
       status: editValues.status,
+      deadline: editValues.deadline, // Pastikan deadline diteruskan
     };
 
-    onEdit(editTaskId, updateData);
+    onEdit(editTaskId, updateData); // Kirim data termasuk deadline
+    alert("Perubahan berhasil disimpan!");
     setEditTaskId(null);
   };
 
@@ -88,6 +91,13 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
                 <textarea
                   value={editValues.description}
                   onChange={(e) => setEditValues({ ...editValues, description: e.target.value })}
+                  className="w-full mt-2 p-2 text-gray-800 border rounded-md"
+                />
+                {/* Input untuk mengedit deadline tugas */}
+                <input
+                  type="date"
+                  value={editValues.deadline}
+                  onChange={(e) => setEditValues({ ...editValues, deadline: e.target.value })}
                   className="w-full mt-2 p-2 text-gray-800 border rounded-md"
                 />
                 {/* Input untuk mengunggah file */}
