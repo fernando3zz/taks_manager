@@ -181,7 +181,11 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
 
                 <button
                   type="button"
-                  onClick={() => onDelete(task.id)}
+                  onClick={() => {
+                    if (window.confirm("Apakah Anda yakin ingin menghapus tugas ini?")) {
+                      onDelete(task.id);
+                    }
+                  }}
                   className="text-red-400 hover:text-red-600 transition rounded-full px-2 py-1 text-sm"
                 >
                   Hapus
