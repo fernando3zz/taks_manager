@@ -30,20 +30,32 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
       alert("User tidak ditemukan!");
       return;
     }
-
+  
+    // Ambil waktu pembuatan saat ini
+    const creationTime = new Date();
+    setCreationTime(creationTime.toISOString()); // Simpan waktu pembuatan ke state
+  
+    // Validasi deadline
+    const deadlineDate = new Date(deadline);
+    if (deadline && deadlineDate < creationTime) {
+      alert("❌ Deadline tidak boleh lebih awal dari tanggal pembuatan!");
+      return;
+    }
+  
     const taskData = {
       title: newTask.trim(),
       description: newDescription.trim(),
       user_id: user.id,
       status,
       deadline: deadline || null, // Pastikan tenggat waktu disertakan, meskipun null
+      creation_time: creationTime.toISOString(), // Sertakan waktu pembuatan
     };
-
+  
     console.log("📤 Mengirim data ke backend:", taskData); // Debugging
-
+  
     try {
       setLoading(true);
-
+  
       // Upload file jika ada
       let filePath = null;
       if (file) {
@@ -54,14 +66,14 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
         });
         filePath = uploadResponse.data.filePath;
       }
-
+  
       // Kirim data tugas ke backend
       const response = await axios.post("http://localhost:5000/tasks", { ...taskData, filePath });
       console.log("✅ Response dari backend:", response.data);
-
+  
       // Panggil callback onTaskAdded untuk memperbarui daftar tugas
       onTaskAdded(response.data);
-
+  
       // Reset form setelah tugas berhasil ditambahkan
       setNewTask("");
       setNewDescription("");
@@ -107,15 +119,16 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
         <option value="in_progress">In Progress</option>
         <option value="done">Done</option>
       </select>
-      {/* Input untuk tenggat waktu */}
-      <input
-        type="datetime-local"
-        value={deadline}
-        onChange={(e) => setDeadline(e.target.value)}
-        placeholder="Tenggat waktu"
-        className="w-full p-2 border rounded bg-white text-black focus:outline-none mb-2"
-        disabled={loading}
-      />
+{/* Input untuk tenggat waktu */}
+<input
+  type="datetime-local"
+  value={deadline}
+  onChange={(e) => setDeadline(e.target.value)}
+  placeholder="Tenggat waktu"
+  className="w-full p-2 border rounded bg-white text-black focus:outline-none mb-2"
+  disabled={loading}
+  min={new Date().toISOString().slice(0, 16)} // Set min ke waktu saat ini
+/>
       {/* Input untuk file */}
       <input
         type="file"
