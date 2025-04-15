@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import TaskForm from "../components/TaskForm";
 import TaskList from "../components/TaskList";
-import { Plus, X, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, X, LogOut, ChevronLeft, ChevronRight, Bell } from "lucide-react";
 
 function Dashboard() {
   const [tasks, setTasks] = useState({
@@ -20,10 +20,12 @@ function Dashboard() {
     in_progress: 1,
     done: 1,
   });
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const tasksPerPage = 10;
   const navigate = useNavigate();
 
-  // Fungsi untuk mengambil data pengguna yang sedang login
+  // Fetch user session
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -42,7 +44,7 @@ function Dashboard() {
     fetchUser();
   }, [navigate]);
 
-  // Fungsi untuk mengatur overflow halaman saat form tugas ditampilkan
+  // Toggle body overflow when task form is shown
   useEffect(() => {
     if (showTaskForm) {
       document.body.classList.add("overflow-hidden");
@@ -51,7 +53,7 @@ function Dashboard() {
     }
   }, [showTaskForm]);
 
-  // Fungsi untuk mengambil daftar tugas dari backend
+  // Fetch tasks from backend
   const fetchTasks = async () => {
     if (!user?.id) return;
     setLoading(true);
@@ -68,7 +70,7 @@ function Dashboard() {
 
       response.data.forEach((task) => {
         if (["open", "in_progress", "done"].includes(task.status)) {
-          groupedTasks[task.status].push(task); // Ensure `creation_time` is included in each task
+          groupedTasks[task.status].push(task);
         }
       });
 
@@ -80,20 +82,53 @@ function Dashboard() {
     }
   };
 
-  // Panggil fetchTasks setiap kali data pengguna tersedia
+  // Fetch tasks when user is available
   useEffect(() => {
     if (user) {
       fetchTasks();
     }
   }, [user]);
 
-  // Fungsi untuk menangani penambahan tugas baru
+  // Check deadlines and set notifications
+  useEffect(() => {
+    const checkDeadlines = () => {
+      const now = new Date();
+      const newNotifications = [];
+
+      Object.values(tasks).flat().forEach((task) => {
+        if (task.deadline) {
+          const deadlineDate = new Date(task.deadline);
+          const timeDiff = deadlineDate - now;
+
+          if (timeDiff > 0 && timeDiff <= 24 * 60 * 60 * 1000) {
+            newNotifications.push({
+              id: task.id,
+              message: `⚠️ Deadline untuk tugas "${task.title}" akan segera berakhir!`,
+              type: "warning",
+            });
+          } else if (timeDiff <= 0) {
+            newNotifications.push({
+              id: task.id,
+              message: `❌ Deadline untuk tugas "${task.title}" telah berakhir!`,
+              type: "error",
+            });
+          }
+        }
+      });
+
+      setNotifications(newNotifications);
+    };
+
+    checkDeadlines();
+  }, [tasks]);
+
+  // Handle task addition
   const handleTaskAdded = async () => {
     fetchTasks();
     setShowTaskForm(false);
   };
 
-  // Fungsi untuk menghapus tugas
+  // Handle task deletion
   const handleDeleteTask = async (taskId) => {
     if (!user?.id) return;
 
@@ -109,7 +144,7 @@ function Dashboard() {
     }
   };
 
-  // Fungsi untuk memperbarui status tugas
+  // Handle task status update
   const handleUpdateTaskStatus = async (taskId, newStatus) => {
     if (!user?.id) return;
 
@@ -144,7 +179,7 @@ function Dashboard() {
     }
   };
 
-  // Fungsi untuk mengedit tugas
+  // Handle task editing
   const handleEditTask = async (taskId, updatedData) => {
     if (!user?.id) return;
 
@@ -204,7 +239,7 @@ function Dashboard() {
     }
   };
 
-  // Fungsi untuk logout pengguna
+  // Handle logout
   const handleLogout = async () => {
     const confirmLogout = window.confirm("Apakah Anda yakin ingin keluar?");
     if (!confirmLogout) return;
@@ -217,7 +252,7 @@ function Dashboard() {
     }
   };
 
-  // Fungsi untuk berpindah ke halaman berikutnya
+  // Pagination handlers
   const handleNextPage = (status) => {
     setCurrentPage((prev) => ({
       ...prev,
@@ -247,6 +282,35 @@ function Dashboard() {
           personal<span className="text-blue-500">task</span>
         </h1>
         <div className="flex gap-4">
+        <div className="relative">
+  <button
+    onClick={() => setShowNotifDropdown((prev) => !prev)}
+    className="relative bg-yellow-400 text-white p-2 rounded-full hover:bg-yellow-500 transition"
+  >
+    <span className="sr-only">Notifikasi</span>
+    <Bell size={20} />
+    {notifications.length > 0 && (
+      <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1 py-0.5 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+        {notifications.length}
+      </span>
+    )}
+  </button>
+
+  {showNotifDropdown && (
+    <div className="absolute right-0 mt-2 w-72 bg-white rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
+      {notifications.length > 0 ? (
+        notifications.map((notif) => (
+          <div key={notif.id} className={`p-3 border-b text-sm ${notif.type === 'warning' ? 'text-yellow-600' : 'text-red-600'}`}>
+            {notif.message}
+          </div>
+        ))
+      ) : (
+        <div className="p-3 text-sm text-gray-500">Tidak ada notifikasi</div>
+      )}
+    </div>
+  )}
+</div>
+
           <button
             type="button"
             onClick={() => setShowTaskForm(true)}
