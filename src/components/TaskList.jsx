@@ -1,16 +1,18 @@
 import { useState } from "react";
 
+// Komponen utama TaskList
 const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile }) => {
-  const [editTaskId, setEditTaskId] = useState(null);
+  const [editTaskId, setEditTaskId] = useState(null); // Menyimpan ID tugas yang sedang diedit
   const [editValues, setEditValues] = useState({
     title: "",
     description: "",
     status: "",
     deadline: "",
+    creation_time: "",
   });
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null); // Menyimpan file yang dipilih saat edit
 
-  // Fungsi untuk memulai mode edit
+  // Menangani klik tombol Edit — mengisi form dengan data tugas yang dipilih
   const handleEditClick = (task) => {
     setEditTaskId(task.id);
     setEditValues({
@@ -18,19 +20,38 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
       description: task.description,
       status: task.status,
       deadline: task.deadline,
+      creation_time: task.creation_time,
     });
-    setSelectedFile(null);
+    setSelectedFile(null); // Reset file yang dipilih
   };
 
-  // Fungsi untuk menyimpan perubahan
+  // Menyimpan perubahan data tugas
   const handleSaveEdit = () => {
     if (!editTaskId) return;
 
+    // Validasi input kosong
     if (!editValues.title.trim() || !editValues.description.trim()) {
       alert("Title dan Deskripsi tidak boleh kosong!");
       return;
     }
 
+    // Konversi tanggal dari string ke objek Date
+    const deadlineDate = new Date(editValues.deadline);
+    const creationDate = new Date(editValues.creation_time);
+
+    // Validasi jika tanggal tidak valid
+    if (isNaN(deadlineDate.getTime()) || isNaN(creationDate.getTime())) {
+      alert("Tanggal tidak valid!");
+      return;
+    }
+
+    // Validasi jika deadline lebih awal dari tanggal dibuat
+    if (deadlineDate < creationDate) {
+      alert("❌ Deadline tidak boleh lebih awal dari tanggal dibuat!");
+      return;
+    }
+
+    // Siapkan data baru dan kirim ke parent melalui onEdit
     const updateData = {
       title: editValues.title.trim(),
       description: editValues.description.trim(),
@@ -40,30 +61,27 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
 
     onEdit(editTaskId, updateData);
     alert("Perubahan berhasil disimpan!");
-    setEditTaskId(null);
+    setEditTaskId(null); // Keluar dari mode edit
   };
 
-  // Fungsi untuk menangani unggahan file
-  const handleFileUpload = (event) => {
-    setSelectedFile(event.target.files[0]);
+  // Menangani pemilihan file saat edit
+  const handleFileUpload = (e) => {
+    setSelectedFile(e.target.files[0]);
   };
 
-  // Fungsi untuk menyimpan file yang diunggah
+  // Menyimpan file yang diunggah
   const handleSaveFileEdit = () => {
     if (!editTaskId || !selectedFile) {
       console.error("❌ Error: Tidak ada tugas atau file yang dipilih");
       return;
     }
 
-    if (onReplaceFile) {
-      onReplaceFile(editTaskId, selectedFile);
-      alert("File berhasil diedit!");
-    } else {
-      console.error("❌ Error: onReplaceFile tidak tersedia");
-    }
+    // Panggil fungsi dari parent jika tersedia
+    onReplaceFile?.(editTaskId, selectedFile);
+    alert("File berhasil diedit!");
   };
 
-  // Fungsi untuk menampilkan pratinjau file
+  // Menampilkan tautan pratinjau file
   const renderFilePreview = (filePath) => {
     const fileUrl = `http://localhost:5000${filePath}`;
     return (
@@ -73,20 +91,16 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
     );
   };
 
-  // Fungsi untuk mendapatkan status berikutnya
-  const getNextStatus = (currentStatus) => {
-    if (currentStatus === "open") return "in_progress";
-    if (currentStatus === "in_progress") return "done";
-    return "done";
+  // Menentukan status tugas selanjutnya
+  const getNextStatus = (status) => {
+    return status === "open" ? "in_progress" : "done";
   };
 
-  // Fungsi untuk mendapatkan status sebelumnya
-  const getPreviousStatus = (currentStatus) => {
-    if (currentStatus === "done") return "in_progress";
-    if (currentStatus === "in_progress") return "open";
-    return "open";
+  // Menentukan status tugas sebelumnya
+  const getPreviousStatus = (status) => {
+    return status === "done" ? "in_progress" : "open";
   };
-
+  
   return (
     <div className="mt-6">
       {tasks.length === 0 ? (
@@ -111,11 +125,13 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
                 />
                 {/* Input untuk mengedit deadline tugas */}
                 <input
-                  type="date"
-                  value={editValues.deadline}
-                  onChange={(e) => setEditValues({ ...editValues, deadline: e.target.value })}
-                  className="w-full mt-2 p-2 text-gray-800 border rounded-md"
-                />
+  type="date"
+  value={editValues.deadline}
+  onChange={(e) => setEditValues({ ...editValues, deadline: e.target.value })}
+  min={editValues.creation_time?.slice(0, 10)} 
+  className="w-full mt-2 p-2 text-gray-800 border rounded-md"
+/>
+
                 {/* Input untuk mengunggah file */}
                 <input type="file" onChange={handleFileUpload} className="w-full mt-2 text-gray-800" />
                 {/* Tombol untuk menyimpan perubahan */}
