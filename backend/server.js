@@ -1,274 +1,268 @@
+// server.js
 import dotenv from "dotenv";
-import express from "express";
-import mysql from "mysql2/promise";
-import cors from "cors";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from 'url';
-import mime from "mime-types"; // Add this import
-
 dotenv.config();
 
+import express from "express";
+import cors from "cors";
+import multer from "multer";
+import { createClient } from "@supabase/supabase-js";
+
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
+  console.error("Missing SUPABASE_URL or SUPABASE_KEY in .env");
+  process.exit(1);
+}
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
 const app = express();
-
-// 🔹 Fix CORS agar mendukung localhost:5173
-app.use(
-  cors({
-    origin: ["http://localhost:3000", "http://localhost:5173"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-
+app.use(cors({ origin: ["http://localhost:3000", "http://localhost:5173"] }));
 app.use(express.json());
 
-// 🔹 Koneksi ke MySQL menggunakan Pool
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+const upload = multer({ storage: multer.memoryStorage() });
 
-// Setup multer for file uploads
-const upload = multer({ dest: 'uploads/' });
-
-// Get the current directory
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Endpoint to handle file uploads
-app.post("/upload", upload.single('file'), async (req, res) => {
+/* ------------------------------
+  Create Task (INSERT)
+-------------------------------*/
+app.post("/tasks", async (req, res) => {
   try {
-    const { file } = req;
-    if (!file) {
-      return res.status(400).json({ error: "No file uploaded" });
+    console.log("📥 Menerima request create task:", req.body);
+    
+    const { title, description, status, user_id, file_path, deadline } = req.body;
+
+    // Validasi input
+    if (!title || !user_id) {
+      return res.status(400).json({ error: "Title dan user_id wajib diisi" });
     }
 
-    // Move the file to a permanent location
-    const targetPath = path.join(__dirname, 'uploads', file.originalname);
-    fs.renameSync(file.path, targetPath);
+    const taskData = {
+      title,
+      description: description || null,
+      status: status || "open",
+      user_id,
+      file_path: file_path || null,
+      deadline: deadline || null
+    };
 
-    res.json({ success: true, filePath: `/uploads/${file.originalname}` });
-  } catch (error) {
-    console.error("❌ Error uploading file:", error.message);
-    res.status(500).json({ error: "File upload error" });
+    console.log("📤 Data yang akan disimpan:", taskData);
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert([taskData])
+      .select("*");
+
+    if (error) {
+      console.error("❌ Supabase error:", error);
+      throw error;
+    }
+
+    console.log("✅ Task berhasil disimpan:", data[0]);
+    res.json(data[0]);
+  } catch (err) {
+    console.error("❌ Error saat create task:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Serve static files from the uploads directory
-app.use('/uploads', (req, res, next) => {
-  const filePath = path.join(__dirname, 'uploads', req.path);
-  const mimeType = mime.lookup(filePath);
-
-  if (mimeType) {
-    res.setHeader('Content-Type', mimeType);
-
-    // Allow preview for video, PDF, DOCX, and image files
-    if (
-      mimeType.startsWith("video/") || // Handle video files
-      mimeType === "application/pdf" ||
-      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-      mimeType.startsWith("image/")
-    ) {
-      res.setHeader('Content-Disposition', 'inline'); // Set to inline for preview
-    } else {
-      res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`); // Default to download
+/* ------------------------------
+  Upload file (untuk TaskForm)
+-------------------------------*/
+app.post("/upload", upload.single("file"), async (req, res) => {
+  try {
+    console.log("📤 Upload file request received");
+    
+    if (!req.file) {
+      return res.json({ success: true, file_path: null });
     }
-  }
 
-  next();
-}, express.static(path.join(__dirname, 'uploads')));
+    const { user_id } = req.body;
+    if (!user_id) {
+      return res.status(400).json({ error: "user_id required" });
+    }
 
-// Middleware validasi request
-const validateTask = (req, res, next) => {
-  const { title, description = "", user_id } = req.body;
-  if (!title || !user_id) {
-    return res.status(400).json({ error: "Title and user_id are required" });
-  }
-  if (typeof description !== "string") {
-    return res.status(400).json({ error: "Description must be a string" });
-  }
-  next();
-};
+    const filename = `${Date.now()}-${req.file.originalname}`;
+    const file_path = `uploads/${filename}`;
 
-// 🔹 Ambil tugas berdasarkan user_id dan status (opsional)
+    console.log("📁 Uploading file:", filename);
+
+    const { error: uploadError } = await supabase.storage
+      .from("task-files")
+      .upload(file_path, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error("❌ Upload error:", uploadError);
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from("task-files")
+      .getPublicUrl(file_path);
+
+    console.log("✅ File uploaded successfully:", file_path);
+
+    res.json({ 
+      success: true, 
+      file_path: file_path,
+      url: data.publicUrl 
+    });
+  } catch (err) {
+    console.error("❌ Upload error:", err);
+    res.status(500).json({ error: err.message || "Upload failed" });
+  }
+});
+
+/* ------------------------------
+  Get tasks by user (SELECT)
+  - supports optional ?status=open
+-------------------------------*/
 app.get("/tasks/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const { status } = req.query;
 
-    if (!userId) return res.status(400).json({ error: "User ID is required" });
+    let query = supabase
+      .from("tasks")
+      .select("id,title,description,status,file_path,created_at,deadline")
+      .eq("user_id", userId);
+    
+    if (status) query = query.eq("status", status);
 
-    let query = "SELECT id, title, description, status, filePath, creation_time, deadline FROM tasks WHERE user_id = ?";
-    const values = [userId];
+    const { data, error } = await query.order("created_at", { ascending: false });
 
-    if (status) {
-      query += " AND status = ?";
-      values.push(status);
-    }
-
-    console.log("📝 Query:", query);
-    console.log("🛠️ Values:", values);
-
-    const [rows] = await pool.execute(query, values);
-    res.json(rows); // Ensure `creation_time` is included in the response
-  } catch (error) {
-    console.error("❌ Error fetching tasks:", error.message);
-    res.status(500).json({ error: "Database error" });
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error("Fetch error:", err);
+    res.status(500).json({ error: err.message || "Database error" });
   }
 });
 
-// 🔹 Tambah tugas baru dengan middleware validasi
-app.post("/tasks", validateTask, async (req, res) => {
-  try {
-    const { title, description = "", user_id, status = "open", filePath = null, deadline = null } = req.body;
-
-    console.log("📥 Data diterima di backend:", { title, description, user_id, status, filePath, deadline });
-
-    const [result] = await pool.execute(
-      "INSERT INTO tasks (title, description, user_id, status, filePath, deadline) VALUES (?, ?, ?, ?, ?, ?)",
-      [title, description.trim(), user_id, status, filePath, deadline]
-    );
-
-    // Fetch the newly created task to include all fields in the response
-    const [newTask] = await pool.execute(
-      "SELECT id, title, description, status, user_id, filePath, deadline, creation_time FROM tasks WHERE id = ?",
-      [result.insertId]
-    );
-
-    res.json(newTask[0]); // Return the full task object, including the creation_time
-  } catch (error) {
-    console.error("❌ Error inserting task:", error.message);
-    res.status(500).json({ error: "Database error" });
-  }
-});
-
-// 🔹 Update tugas berdasarkan id
+/* ------------------------------
+  Update task (UPDATE)
+-------------------------------*/
 app.put("/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    let { title, status, description, user_id, filePath, deadline } = req.body;
+    const payload = req.body;
 
-    if (!user_id) {
-      return res.status(400).json({ error: "User ID is required" });
-    }
+    if (!payload.user_id) return res.status(400).json({ error: "user_id required" });
 
-    // Ambil data lama jika title/description tidak dikirim
-    const [oldTask] = await pool.execute(
-      "SELECT title, description, filePath, deadline FROM tasks WHERE id = ? AND user_id = ?",
-      [id, user_id]
-    );
+    // ensure the row belongs to user
+    const { data: existing, error: getErr } = await supabase
+      .from("tasks")
+      .select("user_id")
+      .eq("id", id)
+      .single();
 
-    if (!oldTask.length) {
+    if (getErr) throw getErr;
+    if (!existing || existing.user_id !== payload.user_id) {
       return res.status(404).json({ error: "Task not found or unauthorized" });
     }
 
-    // Gunakan data lama jika tidak dikirim dari frontend
-    title = title !== undefined ? title.trim() : oldTask[0].title;
-    description = description !== undefined ? description.trim() : oldTask[0].description;
-    filePath = filePath !== undefined ? filePath : oldTask[0].filePath;
-    deadline = deadline !== undefined ? deadline : oldTask[0].deadline;
+    const { data, error } = await supabase
+      .from("tasks")
+      .update({
+        title: payload.title ?? undefined,
+        description: payload.description ?? undefined,
+        status: payload.status ?? undefined,
+        file_path: payload.file_path ?? undefined,
+        deadline: payload.deadline ?? undefined
+      })
+      .eq("id", id)
+      .select()
+      .single();
 
-    console.log("🔄 Update Task:", { id, title, description, status, user_id, filePath, deadline });
-
-    const validStatuses = ["open", "in_progress", "done"];
-    if (status !== undefined && !validStatuses.includes(status)) {
-      return res.status(400).json({ error: "Invalid status" });
-    }
-
-    const query = `UPDATE tasks SET title = ?, description = ?, status = ?, filePath = ?, deadline = ? WHERE id = ? AND user_id = ?`;
-    const values = [title, description, status, filePath, deadline, id, user_id];
-
-    console.log("📝 Query:", query);
-    console.log("🛠️ Values:", values);
-
-    const [result] = await pool.execute(query, values);
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Task not found or unauthorized" });
-    }
-
-    // Fetch the updated task
-    const [updatedTask] = await pool.execute(
-      "SELECT id, title, description, status, filePath, deadline FROM tasks WHERE id = ? AND user_id = ?",
-      [id, user_id]
-    );
-
-    console.log("✅ Updated Task:", updatedTask[0]); // Debugging
-
-    res.json(updatedTask[0]);
-  } catch (error) {
-    console.error("❌ Error updating task:", error.message);
-    res.status(500).json({ error: "Database error" });
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error("Update error:", err);
+    res.status(500).json({ error: err.message || "Database error" });
   }
 });
 
-// 🔹 Hapus tugas berdasarkan id
-app.delete("/tasks/:id", express.json(), async (req, res) => {
+/* ------------------------------
+  Delete task (DELETE)
+-------------------------------*/
+app.delete("/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: "user_id required" });
 
-    if (!user_id) {
-      return res.status(400).json({ error: "User ID is required" });
-    }
-
-    const [result] = await pool.execute(
-      "DELETE FROM tasks WHERE id = ? AND user_id = ?",
-      [id, user_id]
-    );
-
-    if (result.affectedRows === 0) {
+    // check ownership
+    const { data: existing, error: getErr } = await supabase
+      .from("tasks")
+      .select("user_id")
+      .eq("id", id)
+      .single();
+      
+    if (getErr) throw getErr;
+    if (!existing || existing.user_id !== user_id) {
       return res.status(404).json({ error: "Task not found or unauthorized" });
     }
 
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    if (error) throw error;
     res.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting task:", error.message);
-    res.status(500).json({ error: "Database error" });
+  } catch (err) {
+    console.error("Delete error:", err);
+    res.status(500).json({ error: err.message || "Database error" });
   }
 });
 
-// Endpoint to handle file replacement
+/* ------------------------------
+  Replace file for a task (upload to Supabase Storage)
+-------------------------------*/
 app.put("/tasks/:taskId/file", upload.single("file"), async (req, res) => {
-  const { taskId } = req.params;
-  const { file } = req;
-  const user_id = req.body.user_id;
-
-  if (!file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
-
   try {
-    const targetPath = path.join(__dirname, 'uploads', file.originalname);
-    fs.renameSync(file.path, targetPath);
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    const { taskId } = req.params;
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: "user_id required" });
 
-    console.log("📝 Updating task:", { taskId, user_id, filePath: `/uploads/${file.originalname}` });
-
-    const [result] = await pool.execute(
-      "UPDATE tasks SET filePath = ? WHERE id = ? AND user_id = ?",
-      [`/uploads/${file.originalname}`, taskId, user_id]
-    );
-
-    if (result.affectedRows === 0) {
+    // ownership check
+    const { data: existing, error: getErr } = await supabase
+      .from("tasks")
+      .select("user_id")
+      .eq("id", taskId)
+      .single();
+      
+    if (getErr) throw getErr;
+    if (!existing || existing.user_id !== user_id) {
       return res.status(404).json({ error: "Task not found or unauthorized" });
     }
 
-    res.json({ message: "File berhasil diganti", filePath: `/uploads/${file.originalname}` });
-  } catch (error) {
-    console.error("❌ Error updating file:", error);
-    res.status(500).json({ error: error.message || "Server error" });
+    const filename = `${Date.now()}-${req.file.originalname}`;
+    const file_path = `uploads/${filename}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("task-files")
+      .upload(file_path, req.file.buffer, {
+        contentType: req.file.mimetype
+      });
+      
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage
+      .from("task-files")
+      .getPublicUrl(file_path);
+
+    // update DB
+    const { error: updateErr } = await supabase
+      .from("tasks")
+      .update({ file_path: file_path })
+      .eq("id", taskId);
+      
+    if (updateErr) throw updateErr;
+
+    res.json({ success: true, file_path: file_path, url: data.publicUrl });
+  } catch (err) {
+    console.error("Replace file error:", err);
+    res.status(500).json({ error: err.message || "Storage error" });
   }
 });
 
-// 🔹 Jalankan server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log("Server running on", PORT));

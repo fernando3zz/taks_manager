@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { supabase } from "../../supabaseClient";
 
 // Komponen utama TaskList
 const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile }) => {
-  const [editTaskId, setEditTaskId] = useState(null); // Menyimpan ID tugas yang sedang diedit
+  const [editTaskId, setEditTaskId] = useState(null);
   const [editValues, setEditValues] = useState({
     title: "",
     description: "",
@@ -10,58 +11,55 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
     deadline: "",
     creation_time: "",
   });
-  const [selectedFile, setSelectedFile] = useState(null); // Menyimpan file yang dipilih saat edit
+  const [selectedFile, setSelectedFile] = useState(null);
 
-  // Menangani klik tombol Edit — mengisi form dengan data tugas yang dipilih
+  // Menangani klik tombol Edit
   const handleEditClick = (task) => {
     setEditTaskId(task.id);
     setEditValues({
       title: task.title,
       description: task.description,
       status: task.status,
-      deadline: task.deadline,
-      creation_time: task.creation_time,
+      deadline: task.deadline ? task.deadline.slice(0, 16) : "",
+      creation_time: task.created_at || task.creation_time,
     });
-    setSelectedFile(null); // Reset file yang dipilih
+    setSelectedFile(null);
   };
 
   // Menyimpan perubahan data tugas
   const handleSaveEdit = () => {
     if (!editTaskId) return;
 
-    // Validasi input kosong
-    if (!editValues.title.trim() || !editValues.description.trim()) {
-      alert("Title dan Deskripsi tidak boleh kosong!");
+    if (!editValues.title.trim()) {
+      alert("Title tidak boleh kosong!");
       return;
     }
 
-    // Konversi tanggal dari string ke objek Date
-    const deadlineDate = new Date(editValues.deadline);
-    const creationDate = new Date(editValues.creation_time);
+    // Validasi deadline (opsional - hanya jika diisi)
+    if (editValues.deadline) {
+      const deadlineDate = new Date(editValues.deadline);
+      const now = new Date();
 
-    // Validasi jika tanggal tidak valid
-    if (isNaN(deadlineDate.getTime()) || isNaN(creationDate.getTime())) {
-      alert("Tanggal tidak valid!");
-      return;
+      if (isNaN(deadlineDate.getTime())) {
+        alert("Tanggal deadline tidak valid!");
+        return;
+      }
+
+      if (deadlineDate < now) {
+        alert("❌ Deadline tidak boleh lebih awal dari waktu sekarang!");
+        return;
+      }
     }
 
-    // Validasi jika deadline lebih awal dari tanggal dibuat
-    if (deadlineDate < creationDate) {
-      alert("❌ Deadline tidak boleh lebih awal dari tanggal dibuat!");
-      return;
-    }
-
-    // Siapkan data baru dan kirim ke parent melalui onEdit
     const updateData = {
       title: editValues.title.trim(),
-      description: editValues.description.trim(),
+      description: editValues.description.trim() || null,
       status: editValues.status,
-      deadline: editValues.deadline,
+      deadline: editValues.deadline || null,
     };
 
     onEdit(editTaskId, updateData);
-    alert("Perubahan berhasil disimpan!");
-    setEditTaskId(null); // Keluar dari mode edit
+    setEditTaskId(null);
   };
 
   // Menangani pemilihan file saat edit
@@ -76,16 +74,68 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
       return;
     }
 
-    // Panggil fungsi dari parent jika tersedia
     onReplaceFile?.(editTaskId, selectedFile);
     alert("File berhasil diedit!");
   };
 
-  // Menampilkan tautan pratinjau file
+  // 🔧 FUNGSI BARU: Mendapatkan URL file dari Supabase Storage
+  const getFileUrl = (filePath) => {
+    if (!filePath) return null;
+    
+    const { data } = supabase.storage
+      .from("task-files")
+      .getPublicUrl(filePath);
+    
+    return data.publicUrl;
+  };
+
+  // 🔧 FUNGSI BARU: Mengecek apakah file adalah gambar
+  const isImageFile = (filePath) => {
+    if (!filePath) return false;
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp'];
+    return imageExtensions.some(ext => filePath.toLowerCase().endsWith(ext));
+  };
+
+  // 🔧 FUNGSI DIPERBAIKI: Menampilkan preview file (gambar atau link)
   const renderFilePreview = (filePath) => {
-    const fileUrl = `http://localhost:5000${filePath}`;
+    if (!filePath) return null;
+
+    const fileUrl = getFileUrl(filePath);
+    
+    // Jika file adalah gambar, tampilkan preview
+    if (isImageFile(filePath)) {
+      return (
+        <div className="mt-2">
+          <img
+            src={fileUrl}
+            alt="File Preview"
+            className="w-full max-h-48 object-cover rounded-md border border-gray-300"
+            onError={(e) => {
+              // Fallback jika gambar gagal dimuat
+              e.target.style.display = 'none';
+              e.target.nextSibling.style.display = 'block';
+            }}
+          />
+          <a 
+            href={fileUrl} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="text-blue-500 underline text-sm hidden"
+          >
+            View File
+          </a>
+        </div>
+      );
+    }
+
+    // Jika bukan gambar, tampilkan link download
     return (
-      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
+      <a 
+        href={fileUrl} 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className="text-blue-500 underline"
+      >
         View File
       </a>
     );
@@ -110,31 +160,24 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
           <div key={task.id} className="relative bg-white bg-opacity-10 backdrop-blur-md p-5 rounded-xl shadow-lg z-0">
             {editTaskId === task.id ? (
               <div>
-                {/* form Input untuk mengedit judul tugas */}
                 <input
                   type="text"
                   value={editValues.title}
                   onChange={(e) => setEditValues({ ...editValues, title: e.target.value })}
                   className="w-full p-2 text-gray-800 border rounded-md"
                 />
-                {/* Input untuk mengedit deskripsi tugas */}
                 <textarea
                   value={editValues.description}
                   onChange={(e) => setEditValues({ ...editValues, description: e.target.value })}
                   className="w-full mt-2 p-2 text-gray-800 border rounded-md"
                 />
-                {/* Input untuk mengedit deadline tugas */}
                 <input
-  type="date"
-  value={editValues.deadline}
-  onChange={(e) => setEditValues({ ...editValues, deadline: e.target.value })}
-  min={editValues.creation_time?.slice(0, 10)} 
-  className="w-full mt-2 p-2 text-gray-800 border rounded-md"
-/>
-
-                {/* Input untuk mengunggah file */}
+                  type="datetime-local"
+                  value={editValues.deadline}
+                  onChange={(e) => setEditValues({ ...editValues, deadline: e.target.value })}
+                  className="w-full mt-2 p-2 text-gray-800 border rounded-md"
+                />
                 <input type="file" onChange={handleFileUpload} className="w-full mt-2 text-gray-800" />
-                {/* Tombol untuk menyimpan perubahan */}
                 <button
                   type="button"
                   onClick={handleSaveEdit}
@@ -142,7 +185,6 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
                 >
                   ✅ Simpan
                 </button>
-                {/* Tombol untuk menyimpan file */}
                 {selectedFile && (
                   <button
                     type="button"
@@ -152,7 +194,6 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
                     📂 Simpan File
                   </button>
                 )}
-                {/* Tombol untuk membatalkan edit */}
                 <button
                   type="button"
                   onClick={() => setEditTaskId(null)}
@@ -163,7 +204,6 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
               </div>
             ) : (
               <div>
-                {/* Informasi Tugas */}
                 <h3 className="text-lg font-bold text-gray-800">{task.title}</h3>
                 <p className="text-gray-300 mt-1">{task.description}</p>
                 {task.creation_time && (
@@ -176,11 +216,15 @@ const TaskList = ({ tasks = [], onDelete, onUpdateStatus, onEdit, onReplaceFile 
                     <strong>Deadline:</strong> {new Date(task.deadline).toLocaleDateString()}
                   </p>
                 )}
-                {task.filePath && <div className="file-preview mt-2">{renderFilePreview(task.filePath)}</div>}
+                {/* 🔧 DIPERBAIKI: Tampilkan file_path, bukan filePath */}
+                {task.file_path && (
+                  <div className="file-preview mt-2">
+                    {renderFilePreview(task.file_path)}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Tombol Aksi */}
             <div className="mt-4 flex justify-between items-center">
               <div className="flex gap-2">
                 {task.status !== "done" && task.status !== "open" && (
