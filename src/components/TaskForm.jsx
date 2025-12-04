@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import API_URL from "../config/api";
 
 const TaskForm = ({ user, onTaskAdded, resetForm }) => {
   const [newTask, setNewTask] = useState("");
@@ -11,7 +12,6 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
   const [file, setFile] = useState(null);
   const fileInputRef = useRef(null);
 
-  // Reset form setiap kali prop resetForm berubah
   useEffect(() => {
     setNewTask("");
     setNewDescription("");
@@ -24,20 +24,17 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
     }
   }, [resetForm]);
 
-  // Fungsi untuk menambahkan tugas baru
   const addTask = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    // Validasi input
     if (!newTask.trim()) {
       setError("Judul tugas wajib diisi!");
       setLoading(false);
       return;
     }
 
-    // Validasi deadline
     if (deadline) {
       const deadlineDate = new Date(deadline);
       const now = new Date();
@@ -58,9 +55,10 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
         formData.append("user_id", user.id);
 
         console.log("📤 Uploading file untuk user:", user.id);
+        console.log("📡 Upload URL:", `${API_URL}/upload`);
 
         const uploadResponse = await axios.post(
-          "http://localhost:5000/upload",
+          `${API_URL}/upload`,
           formData,
           {
             headers: { "Content-Type": "multipart/form-data" }
@@ -84,9 +82,10 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
       };
 
       console.log("📤 Mengirim data task ke backend:", taskData);
+      console.log("📡 Backend URL:", `${API_URL}/tasks`);
 
       const response = await axios.post(
-        "http://localhost:5000/tasks",
+        `${API_URL}/tasks`,
         taskData,
         {
           headers: { "Content-Type": "application/json" }
@@ -106,7 +105,6 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
         fileInputRef.current.value = "";
       }
 
-      // Callback
       if (onTaskAdded) {
         onTaskAdded();
       }
@@ -123,14 +121,12 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
     <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
       <h3 className="text-lg font-semibold mb-3 text-black">Tambah Tugas</h3>
       
-      {/* Error message */}
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-3">
           {error}
         </div>
       )}
 
-      {/* Input untuk judul tugas */}
       <input
         type="text"
         value={newTask}
@@ -141,7 +137,6 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
         required
       />
 
-      {/* Input untuk deskripsi tugas */}
       <textarea
         value={newDescription}
         onChange={(e) => setNewDescription(e.target.value)}
@@ -151,7 +146,6 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
         disabled={loading}
       />
 
-      {/* Dropdown untuk status tugas */}
       <select
         value={status}
         onChange={(e) => setStatus(e.target.value)}
@@ -163,7 +157,6 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
         <option value="done">Done</option>
       </select>
 
-      {/* Input untuk tenggat waktu */}
       <input
         type="datetime-local"
         value={deadline}
@@ -174,7 +167,6 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
         min={new Date().toISOString().slice(0, 16)}
       />
 
-      {/* Input untuk file */}
       <input
         type="file"
         ref={fileInputRef}
@@ -183,14 +175,12 @@ const TaskForm = ({ user, onTaskAdded, resetForm }) => {
         disabled={loading}
       />
 
-      {/* Tampilkan nama file yang dipilih */}
       {file && (
         <p className="text-sm text-gray-600 mb-2">
           File dipilih: {file.name}
         </p>
       )}
 
-      {/* Tombol untuk menambahkan tugas */}
       <button
         type="button"
         onClick={addTask}

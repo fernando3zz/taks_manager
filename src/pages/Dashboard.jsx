@@ -5,6 +5,7 @@ import axios from "axios";
 import TaskForm from "../components/TaskForm";
 import TaskList from "../components/TaskList";
 import { Plus, X, LogOut, ChevronLeft, ChevronRight, Bell } from "lucide-react";
+import API_URL from "../config/api";
 
 function Dashboard() {
   const [tasks, setTasks] = useState({
@@ -59,7 +60,9 @@ function Dashboard() {
     setLoading(true);
 
     try {
-      const response = await axios.get(`http://localhost:5000/tasks/${user.id}`);
+      
+// Di fungsi fetchTasks (line ~62):
+const response = await axios.get(`${API_URL}/tasks/${user.id}`);
       console.log("🔹 Data dari backend:", response.data);
 
       const groupedTasks = {
@@ -134,10 +137,10 @@ function Dashboard() {
 
     try {
       console.log("🗑 Menghapus task ID:", taskId);
-      await axios.delete(`http://localhost:5000/tasks/${taskId}`, {
-        headers: { "Content-Type": "application/json" },
-        data: { user_id: user.id },
-      });
+await axios.delete(`${API_URL}/tasks/${taskId}`, {
+  headers: { "Content-Type": "application/json" },
+  data: { user_id: user.id },
+});
       fetchTasks();
     } catch (error) {
       console.error("❌ Gagal menghapus tugas:", error.response?.data || error.message);
@@ -150,10 +153,12 @@ function Dashboard() {
 
     try {
       console.log(`🔄 Mengubah status task ${taskId} menjadi ${newStatus}`);
-      await axios.put(`http://localhost:5000/tasks/${taskId}`, {
-        status: newStatus,
-        user_id: user.id,
-      });
+// Di fungsi handleUpdateTaskStatus (line ~125):
+await axios.put(`${API_URL}/tasks/${taskId}`, {
+  status: newStatus,
+  user_id: user.id,
+});
+
 
       setTasks((prevTasks) => {
         const updatedTasks = { ...prevTasks };
@@ -186,13 +191,13 @@ function Dashboard() {
     try {
       console.log(`✏️ Mengedit task ID: ${taskId}`, updatedData);
 
-      const response = await axios.put(`http://localhost:5000/tasks/${taskId}`, {
-        title: updatedData.title,
-        description: updatedData.description,
-        status: updatedData.status,
-        deadline: updatedData.deadline, // Menambahkan deadline ke data yang dikirim
-        user_id: user.id,
-      });
+     const response = await axios.put(`${API_URL}/tasks/${taskId}`, {
+  title: updatedData.title,
+  description: updatedData.description,
+  status: updatedData.status,
+  deadline: updatedData.deadline,
+  user_id: user.id,
+});
 
       console.log("✅ Respon dari server:", response.data);
 
@@ -222,10 +227,10 @@ function Dashboard() {
     formData.append("user_id", user.id);
 
     try {
-      const response = await fetch(`http://localhost:5000/tasks/${taskId}/file`, {
-        method: "PUT",
-        body: formData,
-      });
+     const response = await fetch(`${API_URL}/tasks/${taskId}/file`, {
+  method: "PUT",
+  body: formData,
+});
 
       const data = await response.json();
       if (!response.ok) {
