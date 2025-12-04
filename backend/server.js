@@ -15,7 +15,13 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 const app = express();
-app.use(cors({ origin: ["http://localhost:3000", "http://localhost:5173"] }));
+app.use(cors({ 
+  origin: [
+    "http://localhost:3000", 
+    "http://localhost:5173",
+    "https://fernando3zz-taksmanager.vercel.app"  // 👈 Tambahkan domain Vercel Anda
+  ] 
+}));
 app.use(express.json());
 
 const upload = multer({ storage: multer.memoryStorage() });
