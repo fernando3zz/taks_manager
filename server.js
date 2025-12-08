@@ -15,14 +15,55 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 const app = express();
+
+// Log semua incoming requests
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.path} - Origin: ${req.headers.origin}`);
+  next();
+});
+
+// CORS configuration - HARUS SEBELUM routes
 app.use(cors({ 
-  origin: [
-    "http://localhost:3000", 
-    "http://localhost:5173",
-    "https://fernando3zz-taksmanager.vercel.app"  // 👈 Tambahkan domain Vercel Anda
-  ] 
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'https://fernando3zz-taksmanager.vercel.app'
+    ];
+    
+    // Allow requests with no origin (mobile apps, Postman, etc)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
+
+// Health check endpoint
+app.get("/", (req, res) => {
+  res.json({ 
+    status: "OK", 
+    message: "Task Manager API is running",
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get("/health", (req, res) => {
+  res.json({ 
+    status: "healthy",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+});
 
 const upload = multer({ storage: multer.memoryStorage() });
 
